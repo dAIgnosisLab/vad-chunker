@@ -1,8 +1,8 @@
 <?php
 
-namespace EmrVoice\Vad;
+namespace VadChunker\Vad;
 
-use EmrVoice\Exceptions\EmrVoiceException;
+use VadChunker\Exceptions\VadChunkerException;
 use OnnxRuntime\ElementType;
 use OnnxRuntime\FFI as OrtFFI;
 use OnnxRuntime\InferenceSession;
@@ -36,16 +36,16 @@ final class SileroModel
     public function __construct(string $modelPath, ?string $libPath = null)
     {
         if (!extension_loaded('ffi')) {
-            throw new EmrVoiceException('The PHP FFI extension is required (ext-ffi, ffi.enable=true or CLI with ffi.enable=preload).');
+            throw new VadChunkerException('The PHP FFI extension is required (ext-ffi, ffi.enable=true or CLI with ffi.enable=preload).');
         }
         if ($libPath !== null) {
             if (!is_file($libPath)) {
-                throw new EmrVoiceException("ONNX Runtime library not found at {$libPath}. Run: php artisan emr-voice:install-runtime");
+                throw new VadChunkerException("ONNX Runtime library not found at {$libPath}. Run: php artisan vad-chunker:install-runtime");
             }
             OrtFFI::$lib = $libPath;
         }
         if (!is_file($modelPath)) {
-            throw new EmrVoiceException("Silero model not found at {$modelPath}");
+            throw new VadChunkerException("Silero model not found at {$modelPath}");
         }
 
         $this->session = new InferenceSession($modelPath, intraOpNumThreads: 1, interOpNumThreads: 1);

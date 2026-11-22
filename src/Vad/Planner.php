@@ -1,8 +1,8 @@
 <?php
 
-namespace EmrVoice\Vad;
+namespace VadChunker\Vad;
 
-use EmrVoice\Audio\Pcm;
+use VadChunker\Audio\Pcm;
 
 /**
  * Port of planChunks() and helpers from EMR_websocket/src/audio/vad.js. Arithmetic is kept in the same

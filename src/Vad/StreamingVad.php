@@ -1,6 +1,6 @@
 <?php
 
-namespace EmrVoice\Vad;
+namespace VadChunker\Vad;
 
 /** Port of StreamingVAD (EMR_websocket/src/audio/vad.js): recurrent state, 64-sample context and partial frame kept between feed() calls. */
 final class StreamingVad
@@ -16,6 +16,18 @@ final class StreamingVad
     {
         $this->state = str_repeat(pack('g', 0.0), SileroModel::STATE_FLOATS);
         $this->context = str_repeat("\0", self::CONTEXT_BYTES);
+    }
+
+    /** @return array{state: string, context: string, rest: string} binary strings */
+    public function exportState(): array
+    {
+        return ['state' => $this->state, 'context' => $this->context, 'rest' => $this->rest];
+    }
+
+    /** @param array{state: string, context: string, rest: string} $s */
+    public function importState(array $s): void
+    {
+        ['state' => $this->state, 'context' => $this->context, 'rest' => $this->rest] = $s;
     }
 
     /**

@@ -1,8 +1,8 @@
 <?php
 
-namespace EmrVoice\Audio;
+namespace VadChunker\Audio;
 
-use EmrVoice\Exceptions\InvalidAudioFormat;
+use VadChunker\Exceptions\InvalidAudioFormat;
 
 /** 16 kHz mono PCM16LE helpers. Audio is kept as raw Int16 byte strings (2 bytes/sample) to bound memory. */
 final class Pcm

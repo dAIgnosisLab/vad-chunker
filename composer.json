@@ -1,54 +1,54 @@
 {
-    "name": "daignosislab/emr-voice",
-    "description": "Live audio capture, voice-activity-detection chunking and upload to the dAIgnosisLab EMR pipeline, for Laravel.",
+    "name": "daignosislab/vad-chunker",
+    "description": "Voice activity detection (Silero VAD) that cuts a live or recorded 16 kHz audio stream into speech chunks at natural pauses. Plain PHP, with Laravel integration.",
     "type": "library",
     "license": "proprietary",
+    "keywords": [
+        "vad",
+        "voice activity detection",
+        "silero",
+        "audio",
+        "speech",
+        "chunking",
+        "laravel"
+    ],
     "require": {
         "php": "^8.1",
         "ext-ffi": "*",
-        "ankane/onnxruntime": "^0.2",
-        "guzzlehttp/psr7": "^2.0",
-        "illuminate/bus": "^10.0|^11.0|^12.0",
-        "illuminate/console": "^10.0|^11.0|^12.0",
-        "illuminate/contracts": "^10.0|^11.0|^12.0",
-        "illuminate/http": "^10.0|^11.0|^12.0",
-        "illuminate/support": "^10.0|^11.0|^12.0",
-        "psr/log": "^2.0|^3.0",
-        "ratchet/rfc6455": "^0.3.1|^0.4",
-        "react/event-loop": "^1.5",
-        "react/http": "^1.9",
-        "react/promise": "^3.0",
-        "react/socket": "^1.14"
+        "ankane/onnxruntime": "^0.2"
     },
     "require-dev": {
         "orchestra/testbench": "^8.0|^9.0|^10.0",
         "phpunit/phpunit": "^10.0|^11.0"
     },
     "suggest": {
-        "ext-pcntl": "Graceful restarts of emr-voice:serve on SIGTERM"
+        "illuminate/support": "Laravel integration: facade, config, vad-chunker:install-runtime and vad-chunker:doctor"
     },
     "autoload": {
         "psr-4": {
-            "EmrVoice\\": "src/"
+            "VadChunker\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "EmrVoice\\Tests\\": "tests/"
+            "VadChunker\\Tests\\": "tests/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "EmrVoice\\EmrVoiceServiceProvider"
+                "VadChunker\\VadChunkerServiceProvider"
             ],
             "aliases": {
-                "EmrVoice": "EmrVoice\\Facades\\EmrVoice"
+                "VadChunker": "VadChunker\\Facades\\VadChunker"
             }
         }
     },
     "config": {
         "sort-packages": true
     },
-    "minimum-stability": "stable"
+    "minimum-stability": "stable",
+    "bin": [
+        "bin/vad-chunker"
+    ]
 }

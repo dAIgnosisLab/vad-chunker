@@ -1,8 +1,0 @@
-providers:
-  - EmrVoice\EmrVoiceServiceProvider
-
-env:
-  APP_KEY: base64:3m5Jx7c0Jq0mJb0sR0r8v0QZ0k0u9oXJxYQ3s0m1o2s=
-  CACHE_STORE: file
-  QUEUE_CONNECTION: database
-  EMR_VOICE_API_KEY: dev-key

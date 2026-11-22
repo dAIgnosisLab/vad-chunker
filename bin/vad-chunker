@@ -1,0 +1,49 @@
+#!/usr/bin/env php
+<?php
+// Without Laravel:  vendor/bin/vad-chunker install-runtime [target-path]
+//                   vendor/bin/vad-chunker chunk recording.wav [out-dir]   (writes chunk-000.wav …, prints JSON)
+
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+use VadChunker\Support\Runtime;
+use VadChunker\Vad\SileroModel;
+use VadChunker\VadChunker;
+
+$defaultLib = getcwd() . '/vad-chunker-runtime/' . Runtime::libraryName();
+$cmd = $argv[1] ?? '';
+
+try {
+    if ($cmd === 'install-runtime') {
+        $target = $argv[2] ?? $defaultLib;
+        Runtime::install($target);
+        fwrite(STDERR, "Installed ONNX Runtime " . Runtime::VERSION . " to {$target}\n");
+        exit(0);
+    }
+    if ($cmd === 'chunk' && isset($argv[2])) {
+        $lib = getenv('VAD_CHUNKER_RUNTIME_PATH') ?: $defaultLib;
+        $model = SileroModel::shared(dirname(__DIR__) . '/resources/models/silero_vad.onnx', $lib);
+        $chunks = VadChunker::chunkWav(file_get_contents($argv[2]), $model);
+        $out = $argv[3] ?? null;
+        if ($out !== null && !is_dir($out)) {
+            mkdir($out, 0755, true);
+        }
+        foreach ($chunks as $c) {
+            if ($out !== null) {
+                file_put_contents(sprintf('%s/chunk-%03d.wav', $out, $c->index), $c->wav());
+            }
+        }
+        echo json_encode(array_map(fn ($c) => $c->toArray(), $chunks), JSON_PRETTY_PRINT) . "\n";
+        exit(0);
+    }
+} catch (Throwable $e) {
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
+}
+
+fwrite(STDERR, "usage: vad-chunker install-runtime [path]\n       vad-chunker chunk recording.wav [out-dir]   (16 kHz mono 16-bit WAV)\n");
+exit(2);

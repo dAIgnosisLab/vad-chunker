@@ -1,8 +1,8 @@
 <?php
 
-namespace EmrVoice\Support;
+namespace VadChunker\Support;
 
-use EmrVoice\Exceptions\EmrVoiceException;
+use VadChunker\Exceptions\VadChunkerException;
 
 /**
  * ONNX Runtime shared library. Taken from the onnxruntime-node npm package (it ships the plain C library for
@@ -26,12 +26,12 @@ final class Runtime
         $os = match (PHP_OS_FAMILY) {
             'Linux' => 'linux',
             'Darwin' => 'darwin',
-            default => throw new EmrVoiceException('Unsupported OS for ONNX Runtime: ' . PHP_OS_FAMILY),
+            default => throw new VadChunkerException('Unsupported OS for ONNX Runtime: ' . PHP_OS_FAMILY),
         };
         $arch = match (php_uname('m')) {
             'x86_64', 'amd64' => 'x64',
             'aarch64', 'arm64' => 'arm64',
-            default => throw new EmrVoiceException('Unsupported CPU for ONNX Runtime: ' . php_uname('m')),
+            default => throw new VadChunkerException('Unsupported CPU for ONNX Runtime: ' . php_uname('m')),
         };
         return "$os-$arch";
     }
@@ -47,14 +47,14 @@ final class Runtime
         $member = self::MEMBERS[self::platform()];
         $data = @file_get_contents(self::TARBALL, false, stream_context_create(['http' => ['timeout' => 120]]));
         if ($data === false) {
-            throw new EmrVoiceException('Could not download ' . self::TARBALL);
+            throw new VadChunkerException('Could not download ' . self::TARBALL);
         }
         $got = 'sha512-' . base64_encode(hash('sha512', $data, true));
         if (!hash_equals(self::INTEGRITY, $got)) {
-            throw new EmrVoiceException("Integrity check failed for the ONNX Runtime download (got {$got})");
+            throw new VadChunkerException("Integrity check failed for the ONNX Runtime download (got {$got})");
         }
 
-        $tmpDir = sys_get_temp_dir() . '/emr-voice-ort-' . bin2hex(random_bytes(4));
+        $tmpDir = sys_get_temp_dir() . '/vad-chunker-ort-' . bin2hex(random_bytes(4));
         mkdir($tmpDir);
         try {
             $tgz = "$tmpDir/ort.tgz";
@@ -64,7 +64,7 @@ final class Runtime
                 mkdir(dirname($target), 0755, true);
             }
             if (!rename("$tmpDir/$member", $target) && !copy("$tmpDir/$member", $target)) {
-                throw new EmrVoiceException("Could not write {$target}");
+                throw new VadChunkerException("Could not write {$target}");
             }
             chmod($target, 0644);
         } finally {

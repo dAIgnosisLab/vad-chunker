@@ -1,18 +1,18 @@
 <?php
 
-namespace EmrVoice\Console;
+namespace VadChunker\Console;
 
-use EmrVoice\EmrVoiceManager;
-use EmrVoice\Support\Runtime;
 use Illuminate\Console\Command;
+use VadChunker\ChunkerManager;
+use VadChunker\Support\Runtime;
 
 final class InstallRuntimeCommand extends Command
 {
-    protected $signature = 'emr-voice:install-runtime {--force : Download again even if present}';
+    protected $signature = 'vad-chunker:install-runtime {--force : Download again even if present}';
 
     protected $description = 'Download the ONNX Runtime library used for voice activity detection';
 
-    public function handle(EmrVoiceManager $manager): int
+    public function handle(ChunkerManager $manager): int
     {
         $target = $manager->runtimePath();
         if (is_file($target) && !$this->option('force')) {

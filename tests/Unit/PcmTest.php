@@ -1,11 +1,11 @@
 <?php
 
-namespace EmrVoice\Tests\Unit;
+namespace VadChunker\Tests\Unit;
 
-use EmrVoice\Audio\Pcm;
-use EmrVoice\Exceptions\InvalidAudioFormat;
-use EmrVoice\Vad\Planner;
-use EmrVoice\Vad\VadConfig;
+use VadChunker\Audio\Pcm;
+use VadChunker\Exceptions\InvalidAudioFormat;
+use VadChunker\Vad\Planner;
+use VadChunker\Vad\VadConfig;
 use PHPUnit\Framework\TestCase;
 
 final class PcmTest extends TestCase

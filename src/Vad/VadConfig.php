@@ -1,6 +1,6 @@
 <?php
 
-namespace EmrVoice\Vad;
+namespace VadChunker\Vad;
 
 /** Chunking rules. Defaults are the tested values from vad.js / vad_chunker.py — change only together with the pipeline. */
 final class VadConfig
@@ -24,7 +24,7 @@ final class VadConfig
     ) {
     }
 
-    /** @param array<string, mixed> $c snake_case keys as in config/emr-voice.php */
+    /** @param array<string, mixed> $c snake_case keys as in config/vad-chunker.php */
     public static function fromArray(array $c): self
     {
         $map = [

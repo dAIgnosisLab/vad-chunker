@@ -1,195 +1,134 @@
-# emr-voice
+# vad-chunker
 
-Live consultation recording for Laravel apps. The browser streams the microphone to your backend over a
-WebSocket; this package detects speech pauses (Silero VAD), cuts the audio into 45–90 s chunks at natural
-pauses, and uploads them to the dAIgnosisLab EMR pipeline, which returns a structured EMR.
+Audio in, speech chunks out. Feed a live (or recorded) 16 kHz mono audio stream; get back WAV chunks of
+45–90 s cut inside natural speech pauses, with silence dropped. Voice activity detection is Silero VAD v5
+(ONNX), run in-process through PHP FFI — no Python, no external service.
 
-```
-Browser (mic)  ──PCM 16 kHz──▶  your Laravel backend: php artisan emr-voice:serve  ──WAV chunks──▶  EMR API ──▶ EMR
- emr-voice-recorder.js          (WebSocket + VAD + upload, in this package)                         (dAIgnosisLab)
-```
-
-- Cuts happen in pauses, never mid-word; silence is dropped; each chunk is 16 kHz mono 16-bit WAV.
-- Nothing is lost on a network drop or a server restart: the browser keeps audio until the server
-  confirms it, reconnects on its own and resends from the confirmed point.
-- The chunking is a line-by-line port of the dAIgnosisLab live recording pipeline and is tested to cut at
-  exactly the same places.
+The chunking rules are a line-by-line port of the dAIgnosisLab live recording pipeline and are tested to cut
+at exactly the same places (`tests/Parity`).
 
 ## Requirements
 
-- PHP 8.1+ with `ext-ffi` (enabled for the CLI by default: `ffi.enable=preload`), `ext-pcntl` recommended
-- Laravel 10, 11 or 12
-- A cache store shared by your servers (Redis recommended) and a queue worker (for EMR result events)
+- PHP 8.1+ with `ext-ffi` (`ffi.enable=preload` — the default — is enough for CLI/queue/WebSocket processes;
+  set `ffi.enable=true` to use it inside PHP-FPM requests)
 - Linux or macOS, x64 or arm64
-- Your API key for the EMR API (from dAIgnosisLab)
+- Laravel 10–12 optional (facade, config, artisan commands)
 
 ## Install
 
 ```bash
-composer config repositories.emr-voice vcs https://github.com/dAIgnosisLab/emr-voice
-composer require daignosislab/emr-voice
+composer config repositories.vad-chunker vcs https://github.com/dAIgnosisLab/vad-chunker
+composer require daignosislab/vad-chunker
 
-php artisan emr-voice:install-runtime     # downloads ONNX Runtime 1.23.0 (verified checksum) to storage/emr-voice/
-php artisan vendor:publish --tag=emr-voice-config
-php artisan vendor:publish --tag=emr-voice-assets   # → public/vendor/emr-voice/*.js
+php artisan vad-chunker:install-runtime   # ONNX Runtime 1.23.0, checksum-verified, into storage/vad-chunker/
+php artisan vad-chunker:doctor            # checks FFI, runtime, model, runs one inference
 ```
 
-`.env`:
-
-```env
-EMR_VOICE_API_KEY=your-key
-EMR_VOICE_HOSPITAL_ID=your-hospital-id
-EMR_VOICE_WS_PORT=8090
-EMR_VOICE_ALLOWED_ORIGINS=https://your-app.example
-```
-
-Check everything:
-
-```bash
-php artisan emr-voice:doctor
-```
+Without Laravel: `vendor/bin/vad-chunker install-runtime [path]`.
 
 ## Use
 
-### 1. A route that issues a recording token
+Input is raw PCM16LE, 16 kHz, mono (or 16 kHz mono 16-bit WAV via `feedWav()` / `chunkWav()`).
 
-Your app decides who is recording what. The token (valid 5 min) binds one connection to one recording;
-the browser asks for a fresh one when it reconnects.
+### A live stream
 
-```php
-use EmrVoice\Facades\EmrVoice;
-
-Route::post('/consultations/{consultation}/recording-token', function (Consultation $consultation) {
-    return ['token' => EmrVoice::token(
-        recordingId: (string) $consultation->id,     // your id; reconnects reuse it
-        patientId: (string) $consultation->patient_id,
-        doctorId: (string) auth()->user()->doctor_id,
-    )];
-})->middleware('auth');
-```
-
-### 2. The browser
-
-```html
-<script src="/vendor/emr-voice/emr-voice-recorder.js"></script>
-<script>
-  let recorder;
-  startButton.onclick = async () => {
-    recorder = await EmrVoiceRecorder.start({
-      url: 'wss://your-app.example/vad',
-      getToken: () => fetch(`/consultations/${id}/recording-token`, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf } })
-        .then((r) => r.json()).then((r) => r.token),
-      onStateChange: (s) => (status.textContent = s), // connecting | recording | reconnecting | finishing | done | cancelled | failed
-      onLevel: (rms) => (meter.value = rms),          // microphone level, for a VU meter
-      onChunk: (c) => console.log('sent chunk', c.index),
-      onError: (e) => console.warn(e.code, e.message),
-    });
-  };
-  stopButton.onclick = async () => { await recorder.stop(); status.textContent = 'Generating EMR…'; };
-  discardButton.onclick = () => recorder.cancel();
-</script>
-```
-
-The page must be served over HTTPS (browsers only allow the microphone on secure origins).
-
-### 3. The EMR
-
-When the final chunk is uploaded, a queued job polls for the result and fires an event:
+One chunker per stream. Feed audio as it arrives, any size; chunks come out when they are final.
 
 ```php
-use EmrVoice\Events\EmrReady;
-use EmrVoice\Events\EmrFailed;
+use VadChunker\Facades\VadChunker;
 
-Event::listen(function (EmrReady $e) {
-    Consultation::find($e->recordingId)->update(['emr' => $e->emr]);
-});
-Event::listen(function (EmrFailed $e) {
-    // $e->status: no_speech | cancelled | failed | timeout
-});
-```
+$chunker = VadChunker::make();
 
-Or ask directly: `EmrVoice::result($recordingId)` → `['status' => 'completed', 'emr' => [...]]`, and
-`EmrVoice::recording($recordingId)` for the recording's state.
+// for each piece of audio received (e.g. each WebSocket message):
+foreach ($chunker->feed($pcm) as $chunk) {
+    handle($chunk);
+}
 
-Other events: `RecordingStarted`, `ChunkUploaded`, `SilenceDetected`, `UploadFailed`, `RecordingFinished`,
-`RecordingCancelled`. All except `EmrReady`/`EmrFailed` are fired inside the WebSocket server process — make
-listeners that do real work `ShouldQueue` so they don't hold up audio processing.
+// end of the stream:
+foreach ($chunker->finish() as $chunk) {
+    handle($chunk);
+}
 
-## Run in production
-
-Supervisor:
-
-```ini
-[program:emr-voice]
-command=php /var/www/app/artisan emr-voice:serve
-user=www-data
-autostart=true
-autorestart=true
-stopsignal=TERM
-stopwaitsecs=15
-
-[program:emr-voice-queue]
-command=php /var/www/app/artisan queue:work
-user=www-data
-autostart=true
-autorestart=true
-```
-
-nginx (inside your HTTPS server block):
-
-```nginx
-location /vad {
-    proxy_pass http://127.0.0.1:8090;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_read_timeout 3600s;
-    proxy_send_timeout 3600s;
+function handle(\VadChunker\Chunk $chunk): void
+{
+    $chunk->wav();          // WAV file contents (16 kHz mono 16-bit)
+    $chunk->pcm;            // raw PCM16LE
+    $chunk->index;          // 0, 1, 2, …
+    $chunk->start;          // stream seconds this chunk covers
+    $chunk->end;
+    $chunk->reason;         // pause | long-pause | quietest-point | end
+    $chunk->speechRatio;    // share of speech frames
+    $chunk->seconds();      // length of the audio
 }
 ```
 
-- One `emr-voice:serve` process handles dozens of simultaneous recordings (VAD costs about 3 ms per
-  second of audio). Restart it freely (deploys): browsers reconnect and resume.
-- Several servers: use a shared cache store (`EMR_VOICE_CACHE_STORE=redis`) so a reconnect can resume on any
-  server; sticky routing (`ip_hash`) keeps a recording on one process, which is preferable.
-- If the browser disappears without pressing stop, the recording is finished automatically after
-  `server.resume_grace_s` (60 s) so the EMR is still generated (`on_disconnect` can be set to `cancel`).
+A chunk is released once 2 s of audio after its cut have arrived, so most `feed()` calls return nothing.
 
-## Configuration
+### Across requests
 
-See `config/emr-voice.php`. The `vad` section holds the tested chunking rules of the pipeline — leave them as
-they are unless dAIgnosisLab asks otherwise.
+If each piece of the stream arrives in a separate HTTP request, save the state between them:
 
-## WebSocket protocol (for custom clients)
+```php
+$chunker = $snapshot ? VadChunker::restore($snapshot) : VadChunker::make();
+$chunks = $chunker->feed($request->getContent());
+$snapshot = $chunker->snapshot();   // store it (cache/redis/file) for the next request — up to ~3 MB
+```
 
-`wss://host/vad?token=…` — after `{"type":"ready","resumeOffset":n}`, send binary frames of PCM16LE,
-16 kHz, mono, starting at byte `n` of your stream (0 for a new recording), in order, any size.
+Restoring between every piece gives exactly the same chunks as one continuous stream (tested). Requests for
+one stream must be processed in order.
 
-| From | Message | Meaning |
+### A whole recording
+
+```php
+$chunks = VadChunker::chunkWav(file_get_contents('consultation.wav'));
+```
+
+CLI: `vendor/bin/vad-chunker chunk consultation.wav out/` writes `out/chunk-000.wav …` and prints the metadata.
+
+### Other
+
+- `$chunker->silences()` — silent spans of 5 s or more dropped since the last call (`[start, end, durationS]`)
+- `$chunker->lastSpeechSeconds()` — when someone last spoke (for "is anyone talking?" checks)
+- `VadChunker::make(['min_s' => 20, 'max_s' => 40])` — override rules per stream
+
+Without Laravel:
+
+```php
+use VadChunker\Vad\SileroModel;
+use VadChunker\VadChunker;
+
+$model = SileroModel::shared('vendor/daignosislab/vad-chunker/resources/models/silero_vad.onnx', '/path/to/libonnxruntime.so.1');
+$chunker = new VadChunker($model);
+```
+
+The model is loaded once per process and shared by all chunkers; each `feed()` costs about 3 ms per second of
+audio.
+
+## Rules (config/vad-chunker.php)
+
+| | default | |
 |---|---|---|
-| client | binary | audio |
-| client | `{"type":"stop"}` | end of recording — generate the EMR |
-| client | `{"type":"cancel"}` | discard — no EMR |
-| server | `{"type":"ready","resumeOffset":n}` | send audio from byte `n` |
-| server | `{"type":"ack","offset":n}` | bytes before `n` are safe — drop them from your buffer |
-| server | `{"type":"chunk","index",…}` / `{"type":"silence",…}` | progress |
-| server | `{"type":"finishing"}` then `{"type":"done","chunks":n}` | finished (or `cancelled` / `failed`) |
-| server | `{"type":"error","code","message"}` | `upload_retrying`, `upload_rejected`, `idle`, `not_ready`, … |
+| `min_s` | 45 | never cut before |
+| `target_s` | 60 | from here, cut at the first pause ≥ `min_pause_s` (0.3 s) |
+| `max_s` | 90 | no pause by then: cut at the quietest 0.3 s |
+| `long_pause_s` | 0.8 | between `min_s` and `target_s`, cut only at a pause this long |
+| `threshold` / `neg_threshold` | 0.5 / 0.35 | speech on / off probabilities |
+| `settle_s` | 2 | a cut is final once this much later audio arrived |
+| `drop_silence`, `keep_s` | true, 1 | drop audio while nobody speaks, keep 1 s before speech |
+| `trim`, `trim_min_s`, `trim_pad_s` | true, 1, 0.3 | trim leading/trailing silence > 1 s inside a chunk |
 
-Keep every byte you sent until it is acked; after a reconnect, resend from `resumeOffset`.
+Cuts always fall inside a pause (up to 1 s into it), so no word is split.
 
 ## Development
 
 ```bash
-docker build -t emr-voice-dev docker/
-docker run --rm -v "$PWD":/pkg emr-voice-dev composer install
-docker run --rm -v "$PWD":/pkg emr-voice-dev tests/fixtures/build.sh      # decode the test recordings (ffmpeg)
-docker run --rm -v "$PWD":/pkg emr-voice-dev vendor/bin/testbench emr-voice:install-runtime
-docker run --rm -v "$PWD":/pkg emr-voice-dev vendor/bin/phpunit
-node tests/js/worklet.test.mjs && node tests/js/stream.test.mjs && node tests/js/serve-command.test.mjs
+docker build -t vad-chunker-dev docker/
+docker run --rm -v "$PWD":/pkg vad-chunker-dev composer install
+docker run --rm -v "$PWD":/pkg vad-chunker-dev tests/fixtures/build.sh
+docker run --rm -v "$PWD":/pkg vad-chunker-dev vendor/bin/testbench vad-chunker:install-runtime
+docker run --rm -v "$PWD":/pkg vad-chunker-dev vendor/bin/phpunit
 ```
 
-`tests/reference/` holds the cut points produced by the production `vad.js` for the fixtures
-(`generate.mjs`); the parity tests require the PHP port to match them exactly. Put your own recordings in
-`tests/fixtures/private/` (never committed) to compare on real consultations.
+`tests/reference/*.json` are the cuts the production `vad.js` makes on the fixtures (`tests/reference/generate.mjs`);
+`tests/Parity` requires the PHP port to match them exactly. Recordings in `tests/fixtures/private/` (never
+committed) are included when present.

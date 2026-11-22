@@ -1,8 +1,8 @@
 <?php
 
-namespace EmrVoice\Vad;
+namespace VadChunker\Vad;
 
-use EmrVoice\Audio\Pcm;
+use VadChunker\Audio\Pcm;
 
 /**
  * Port of LiveChunker (EMR_websocket/src/audio/vad.js): Planner::plan applied to a live 16 kHz stream.
@@ -37,6 +37,34 @@ final class LiveChunker
     {
         $this->vad = new StreamingVad($model);
         $this->offset = $startOffset;
+    }
+
+    /** Everything needed to continue this stream later (e.g. in the next HTTP request). Binary-safe array. */
+    public function exportState(): array
+    {
+        return [
+            'v' => 1, 'vad' => $this->vad->exportState(), 'buf' => $this->buf, 'probs' => pack('g*', ...$this->probs),
+            'offset' => $this->offset, 'count' => $this->count, 'lastSpeechS' => $this->lastSpeechS, 'everSpoke' => $this->everSpoke,
+            'droppedS' => $this->droppedS, 'run' => $this->run, 'silenceStart' => $this->silenceStart, 'silences' => $this->silences,
+        ];
+    }
+
+    public function importState(array $s): void
+    {
+        if (($s['v'] ?? null) !== 1) {
+            throw new \InvalidArgumentException('Unsupported chunker state version');
+        }
+        $this->vad->importState($s['vad']);
+        $this->buf = $s['buf'];
+        $this->probs = $s['probs'] === '' ? [] : array_values(unpack('g*', $s['probs']));
+        $this->offset = $s['offset'];
+        $this->count = $s['count'];
+        $this->lastSpeechS = $s['lastSpeechS'];
+        $this->everSpoke = $s['everSpoke'];
+        $this->droppedS = $s['droppedS'];
+        $this->run = $s['run'];
+        $this->silenceStart = $s['silenceStart'];
+        $this->silences = $s['silences'];
     }
 
     public function elapsedS(): float

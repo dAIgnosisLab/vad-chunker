@@ -1,12 +1,12 @@
 <?php
 
-namespace EmrVoice\Tests\Parity;
+namespace VadChunker\Tests\Parity;
 
-use EmrVoice\Audio\Pcm;
-use EmrVoice\Tests\Support\Model;
-use EmrVoice\Vad\LiveChunker;
-use EmrVoice\Vad\StreamingVad;
-use EmrVoice\Vad\VadConfig;
+use VadChunker\Audio\Pcm;
+use VadChunker\Tests\Support\Model;
+use VadChunker\Vad\LiveChunker;
+use VadChunker\Vad\StreamingVad;
+use VadChunker\Vad\VadConfig;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

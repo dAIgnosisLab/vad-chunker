@@ -1,7 +1,7 @@
 <?php
 
-namespace EmrVoice\Exceptions;
+namespace VadChunker\Exceptions;
 
-class InvalidAudioFormat extends EmrVoiceException
+class InvalidAudioFormat extends VadChunkerException
 {
 }
