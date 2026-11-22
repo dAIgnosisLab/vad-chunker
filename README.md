@@ -104,6 +104,61 @@ $chunker = new VadChunker($model);
 The model is loaded once per process and shared by all chunkers; each `feed()` costs about 3 ms per second of
 audio.
 
+## Sending chunks to the dAIgnosisLab EMR API
+
+Each chunk goes to the Midas API as one upload: ask for an upload URL with the chunk's index, then PUT the
+WAV to it. The last chunk carries `isFinal: true`, which starts EMR generation. Full API reference:
+"Midas API: Developer Integration Guide".
+
+```php
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Http;
+use VadChunker\Audio\Pcm;
+use VadChunker\Facades\VadChunker;
+
+$api = Http::baseUrl('https://midas-api.ailab.com.np/api/v1')
+    ->withHeaders(['X-API-Key' => config('services.midas.key')])
+    ->acceptJson();
+
+// once per recording
+$sessionId = $api->post('/sessions', [
+    'hospitalId' => $hospitalId, 'doctorId' => $doctorId, 'patientId' => $patientId,
+])->throw()->json('sessionId');
+$chunker = VadChunker::make();
+$next = 0;   // next chunk index: keep it with the recording (with the snapshot when you use one)
+
+function uploadChunk(PendingRequest $api, string $sessionId, int $index, string $wav, bool $isFinal): void
+{
+    // Safe to retry: the same chunkIndex always maps to the same chunk, so a retry never leaves a gap.
+    retry(5, function () use ($api, $sessionId, $index, $wav, $isFinal) {
+        $url = $api->post("/sessions/{$sessionId}/chunks/url", ['chunkIndex' => $index, 'isFinal' => $isFinal])
+            ->throw()->json('uploadUrl');
+        Http::withBody($wav, 'audio/wav')->put($url)->throw();
+    }, fn (int $attempt) => 500 * $attempt);
+}
+
+// while recording: upload each chunk as soon as it is ready
+foreach ($chunker->feed($pcm) as $chunk) {
+    uploadChunk($api, $sessionId, $next++, $chunk->wav(), false);
+}
+
+// when the recording stops: the remaining chunks, the last one final
+$last = $chunker->finish();
+if ($last === []) {
+    // nothing left but silence: a 0.1 s silent WAV closes the session
+    uploadChunk($api, $sessionId, $next++, Pcm::toWav(str_repeat("\0", 3200)), true);
+}
+foreach ($last as $i => $chunk) {
+    uploadChunk($api, $sessionId, $next++, $chunk->wav(), $i === array_key_last($last));
+}
+
+// later: poll until status is "completed"
+$result = $api->get("/sessions/{$sessionId}/result")->throw()->json();   // ['status' => …, 'emr' => …]
+```
+
+Upload from a queued job if your request handling must stay fast; keep the uploads of one recording in
+order (one worker per recording, or `WithoutOverlapping` keyed by the session).
+
 ## Rules (config/vad-chunker.php)
 
 | | default | |
