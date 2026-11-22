@@ -38,6 +38,10 @@ final class SileroModel
         if (!extension_loaded('ffi')) {
             throw new VadChunkerException('The PHP FFI extension is required (ext-ffi, ffi.enable=true or CLI with ffi.enable=preload).');
         }
+        if (ini_get('ffi.enable') === 'preload' && PHP_SAPI !== 'cli') {
+            throw new VadChunkerException('FFI is only enabled for CLI processes here (ffi.enable=preload). Set ffi.enable=true for '
+                . PHP_SAPI . ', or run the chunking in a queue worker, artisan command or WebSocket server.');
+        }
         if ($libPath !== null) {
             if (!is_file($libPath)) {
                 throw new VadChunkerException("ONNX Runtime library not found at {$libPath}. Run: php artisan vad-chunker:install-runtime");

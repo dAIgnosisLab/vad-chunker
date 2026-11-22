@@ -12,7 +12,7 @@ at exactly the same places (`tests/Parity`).
 - PHP 8.1+ with `ext-ffi` (`ffi.enable=preload` — the default — is enough for CLI/queue/WebSocket processes;
   set `ffi.enable=true` to use it inside PHP-FPM requests)
 - Linux or macOS, x64 or arm64
-- Laravel 10–12 optional (facade, config, artisan commands)
+- Laravel 10–13 optional (facade, config, artisan commands)
 
 ## Install
 
