@@ -1,9 +1,0 @@
-{
-  "name": "midas-vad-reference",
-  "private": true,
-  "type": "module",
-  "description": "Runs the production vad.js LiveChunker on the fixtures to produce the cut points the PHP port must match.",
-  "dependencies": {
-    "onnxruntime-node": "1.23.0"
-  }
-}

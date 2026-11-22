@@ -184,6 +184,6 @@ docker run --rm -v "$PWD":/pkg vad-chunker-dev vendor/bin/testbench vad-chunker:
 docker run --rm -v "$PWD":/pkg vad-chunker-dev vendor/bin/phpunit
 ```
 
-`tests/reference/*.json` are the cuts the production `vad.js` makes on the fixtures (`tests/reference/generate.mjs`);
-`tests/Parity` requires the PHP port to match them exactly. Recordings in `tests/fixtures/private/` (never
-committed) are included when present.
+`tests/reference/*.json` are the cuts the dAIgnosisLab production chunker (`vad.js` in EMR_websocket) makes on
+the fixtures; `tests/Parity` requires the PHP port to match them exactly. References for your own recordings in
+`tests/reference/private/` (never committed) are included when present.

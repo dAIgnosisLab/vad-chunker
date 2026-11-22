@@ -2,7 +2,6 @@
 /composer.lock
 /.phpunit.cache/
 /tests/fixtures/private/
-/tests/reference/node_modules/
 /runtime/
 /tests/fixtures/build/
 /tests/reference/private/

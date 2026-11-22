@@ -1,0 +1,6 @@
+# Development files: kept in the repository, left out of what composer installs.
+/tests          export-ignore
+/docker         export-ignore
+/phpunit.xml    export-ignore
+/.gitattributes export-ignore
+/.gitignore     export-ignore
